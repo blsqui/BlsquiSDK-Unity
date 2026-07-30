@@ -1,0 +1,10 @@
+{
+  "name": "com.blsqui.sdk",
+  "version": "1.0.0",
+  "displayName": "Blsqui SDK",
+  "description": "Official Unity SDK for Blsqui — Flow blockchain Local loopback Auth integration & enterprise Cloudflare transaction relay.",
+  "unity": "2021.3",
+  "author": {
+    "name": "Blsqui"
+  }
+}
