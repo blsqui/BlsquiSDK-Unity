@@ -89,7 +89,7 @@ namespace Blsqui.SDK
             string currentNonce = GenerateClientNonce();
             long currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            // 1. Build Query Parameters
+            // Build Query Parameters
             List<string> queryParts = new List<string>
             {
                 $"flix={UnityWebRequest.EscapeURL(flixId)}",
@@ -115,7 +115,7 @@ namespace Blsqui.SDK
                 Debug.Log($"<color=#3B82F6>[BlsquiSDK]</color> Nonce: {currentNonce}");
             }
 
-            // 2. Launch system browser
+            // Launch system browser
             try
             {
                 Application.OpenURL(fullUrl);
@@ -131,7 +131,7 @@ namespace Blsqui.SDK
                 };
             }
 
-            // 3. Poll backend server for transaction status
+            // Poll backend server for transaction status
             return await PollTransactionStatusAsync(isTestnet, currentNonce, verbose);
         }
 
