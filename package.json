@@ -1,6 +1,6 @@
 {
   "name": "com.blsqui.sdk",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "displayName": "Blsqui SDK",
   "description": "Official Unity SDK for Blsqui — Flow blockchain payment and wallet gateway SDK for Unity.",
   "unity": "2021.3",

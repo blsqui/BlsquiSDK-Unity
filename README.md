@@ -101,6 +101,7 @@ public class TxResult
     public string to;            // Recipient account address (extracted from TokensDeposited)
     public string amount;        // Executed payment amount (Cadence UFix64 string)
     public string token;         // Token identifier (e.g., "FlowToken")
+    public string txFee;         // Gas/execution fee deducted on-chain (Cadence UFix64 string, or null)
     public string error;         // Client-side error or failure description
     public string errorMessage;  // Detailed Cadence runtime error message from the node, or null
 }

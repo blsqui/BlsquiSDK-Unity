@@ -27,6 +27,7 @@ namespace Blsqui.SDK
         public string to;
         public string amount;
         public string token;
+        public string txFee;        // Cadence UFix64 string or null
         public string error;
         public string errorMessage;
     }
@@ -42,13 +43,24 @@ namespace Blsqui.SDK
         public string to;
         public string amount;
         public string token;
+        public string txFee;
+        public string tx_fee;
+    }
+
+    [Serializable]
+    internal class ApiSignResponse
+    {
+        public string token;
+        public string error;
     }
 
     public static class BlsquiSDK
     {
-        // --- Gateway & Polling Endpoints ---
+        // --- Gateway, Session Sign & Polling Endpoints ---
         public const string MAINNET_GATEWAY_URL = "https://wallet.blsqui.net/transaction";
         public const string TESTNET_GATEWAY_URL = "https://lab.blsqui.net/transaction";
+        public const string MAINNET_SESSION_SIGN_API = "https://wallet.blsqui.net/api/session/sign";
+        public const string TESTNET_SESSION_SIGN_API = "https://lab.blsqui.net/api/session/sign";
         public const string MAINNET_POLL_API = "https://wallet.blsqui.net/api/status";
         public const string TESTNET_POLL_API = "https://lab.blsqui.net/api/status";
 
@@ -69,7 +81,8 @@ namespace Blsqui.SDK
         }
 
         /// <summary>
-        /// Primary Entry Point: Launches browser and polls backend server for on-chain completion.
+        /// Primary Entry Point: Requests a signed session token, launches system browser,
+        /// and polls backend server for on-chain completion.
         /// </summary>
         public static async Task<TxResult> RequestTransaction(TxOptions options = null)
         {
@@ -89,24 +102,38 @@ namespace Blsqui.SDK
             string currentNonce = GenerateClientNonce();
             long currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            // Build Query Parameters
-            List<string> queryParts = new List<string>
+            // Prepare payload dictionary for session signing
+            var signPayload = new Dictionary<string, object>
             {
-                $"flix={UnityWebRequest.EscapeURL(flixId)}",
-                $"issued_time={currentTime}",
-                $"nonce={UnityWebRequest.EscapeURL(currentNonce)}"
+                { "flix", flixId },
+                { "issued_time", currentTime },
+                { "nonce", currentNonce }
             };
 
+            // Merge custom transaction arguments into payload
             foreach (var kvp in args)
             {
                 string val = kvp.Value?.Trim() ?? "";
                 if (!string.IsNullOrEmpty(val))
                 {
-                    queryParts.Add($"{UnityWebRequest.EscapeURL(kvp.Key)}={UnityWebRequest.EscapeURL(val)}");
+                    signPayload[kvp.Key] = val;
                 }
             }
 
-            string fullUrl = $"{baseUrl}?{string.Join("&", queryParts)}";
+            // Acquire asymmetrically signed JWT session token from edge functions
+            var tokenRes = await AcquireSignedSessionTokenAsync(isTestnet, signPayload, verbose);
+            if (!tokenRes.success)
+            {
+                return new TxResult
+                {
+                    status = "FAILED",
+                    nonce = currentNonce,
+                    error = $"Failed to sign transaction session: {tokenRes.error ?? "Unknown error"}"
+                };
+            }
+
+            // Build tamper-proof request URL using the single signed token
+            string fullUrl = $"{baseUrl}?request={UnityWebRequest.EscapeURL(tokenRes.token)}";
 
             if (verbose)
             {
@@ -133,6 +160,65 @@ namespace Blsqui.SDK
 
             // Poll backend server for transaction status
             return await PollTransactionStatusAsync(isTestnet, currentNonce, verbose);
+        }
+
+        /// <summary>
+        /// Requests an asymmetrically signed JWT session token via /api/session/sign
+        /// </summary>
+        private static async Task<(bool success, string token, string error)> AcquireSignedSessionTokenAsync(
+            bool isTestnet, 
+            Dictionary<string, object> payload, 
+            bool verbose)
+        {
+            string signApiUrl = isTestnet ? TESTNET_SESSION_SIGN_API : MAINNET_SESSION_SIGN_API;
+            string jsonBody = SerializeDictionary(payload);
+
+            using (UnityWebRequest webRequest = new UnityWebRequest(signApiUrl, UnityWebRequest.kHttpVerbPOST))
+            {
+                byte[] rawBody = Encoding.UTF8.GetBytes(jsonBody);
+                webRequest.uploadHandler = new UploadHandlerRaw(rawBody);
+                webRequest.downloadHandler = new DownloadHandlerBuffer();
+                webRequest.SetRequestHeader("Content-Type", "application/json");
+                webRequest.SetRequestHeader("Accept", "application/json");
+
+                var asyncOp = webRequest.SendWebRequest();
+                while (!asyncOp.isDone)
+                {
+                    await Task.Delay(50);
+                }
+
+                string bodyText = webRequest.downloadHandler.text;
+                ApiSignResponse resData = null;
+
+                try
+                {
+                    if (!string.IsNullOrEmpty(bodyText))
+                    {
+                        resData = JsonUtility.FromJson<ApiSignResponse>(bodyText);
+                    }
+                }
+                catch
+                {
+                    // Fallback if parsing fails
+                }
+
+                if (webRequest.result != UnityWebRequest.Result.Success || webRequest.responseCode < 200 || webRequest.responseCode >= 300)
+                {
+                    string errorMsg = !string.IsNullOrEmpty(resData?.error) ? resData.error : $"HTTP_{webRequest.responseCode}";
+                    if (verbose)
+                    {
+                        Debug.LogError($"<color=#EF4444>[BlsquiSDK]</color> Session token signing failed: {errorMsg}");
+                    }
+                    return (false, null, errorMsg);
+                }
+
+                if (resData == null || string.IsNullOrEmpty(resData.token))
+                {
+                    return (false, null, "Response missing signed token");
+                }
+
+                return (true, resData.token, null);
+            }
         }
 
         private static async Task<TxResult> PollTransactionStatusAsync(bool isTestnet, string nonce, bool verbose)
@@ -210,6 +296,8 @@ namespace Blsqui.SDK
                                 Debug.Log($"<color=#10B981>[BlsquiSDK]</color> 🎉 Transaction Sealed! TX ID: {responseData.txId}");
                             }
 
+                            string fee = !string.IsNullOrEmpty(responseData.txFee) ? responseData.txFee : responseData.tx_fee;
+
                             return new TxResult
                             {
                                 status = "SEALED",
@@ -219,7 +307,8 @@ namespace Blsqui.SDK
                                 payer = responseData.payer,
                                 to = responseData.to,
                                 amount = responseData.amount,
-                                token = responseData.token
+                                token = responseData.token,
+                                txFee = fee
                             };
                         }
                         else if (status == "EXPIRED")
@@ -271,7 +360,6 @@ namespace Blsqui.SDK
                 rng.GetBytes(randomBytes);
             }
 
-            // Match Godot: convert 32 random bytes to 64 hex characters, then SHA-256 hash that string
             StringBuilder hexBuilder = new StringBuilder(64);
             foreach (byte b in randomBytes)
             {
@@ -289,6 +377,37 @@ namespace Blsqui.SDK
                 }
                 return sb.ToString();
             }
+        }
+
+        /// <summary>
+        /// Helper to serialize dictionary payloads without relying on external dependencies like Newtonsoft.
+        /// </summary>
+        private static string SerializeDictionary(Dictionary<string, object> dict)
+        {
+            var parts = new List<string>();
+            foreach (var kvp in dict)
+            {
+                if (kvp.Value is string strVal)
+                {
+                    parts.Add($"\"{EscapeJsonString(kvp.Key)}\":\"{EscapeJsonString(strVal)}\"");
+                }
+                else if (kvp.Value is long || kvp.Value is int || kvp.Value is float || kvp.Value is double || kvp.Value is bool)
+                {
+                    string formatted = kvp.Value is bool b ? (b ? "true" : "false") : kvp.Value.ToString();
+                    parts.Add($"\"{EscapeJsonString(kvp.Key)}\":{formatted}");
+                }
+                else
+                {
+                    parts.Add($"\"{EscapeJsonString(kvp.Key)}\":\"{EscapeJsonString(kvp.Value?.ToString() ?? "")}\"");
+                }
+            }
+            return "{" + string.Join(",", parts) + "}";
+        }
+
+        private static string EscapeJsonString(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            return text.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t");
         }
     }
 }
