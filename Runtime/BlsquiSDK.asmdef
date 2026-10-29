@@ -1,7 +1,9 @@
 {
     "name": "BlsquiSDK",
     "rootNamespace": "Blsqui.SDK",
-    "references": [],
+    "references": [
+        "Unity.WebRTC"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
