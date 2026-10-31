@@ -1,12 +1,19 @@
 {
-  "name": "com.blsqui.sdk",
-  "version": "1.2.1",
+  "name": "net.blsqui.sdk",
+  "version": "2.0.0",
   "displayName": "Blsqui SDK",
   "description": "Official Unity SDK for Blsqui — Flow blockchain payment and wallet gateway SDK for Unity.",
-  "unity": "2021.3",
+  "unity": "2022.3",
   "dependencies": {
     "com.unity.webrtc": "3.0.0-pre.7"
   },
+  "samples": [
+    {
+      "displayName": "Valkyrie Vanguard Gameplay Demo",
+      "description": "Demonstrates WebRTC session sync, dashboard trigger, dynamic DEF/ATK action buttons, and FLIX shop execution.",
+      "path": "Samples~/ValkyrieVanguardExample"
+    }
+  ],
   "keywords": ["flow", "blockchain", "payment", "sdk", "blsqui"],
   "author": {
     "name": "Blsqui",

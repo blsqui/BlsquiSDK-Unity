@@ -2,7 +2,8 @@
     "name": "BlsquiSDK",
     "rootNamespace": "Blsqui.SDK",
     "references": [
-        "Unity.WebRTC"
+        "Unity.WebRTC",
+        "UnityEngine.UnityWebRequestModule"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
