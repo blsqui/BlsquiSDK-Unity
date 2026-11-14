@@ -24,6 +24,8 @@ namespace Blsqui.SDK
     {
         public string type;
         public string player;
+        public string publisherAddress;
+        public string appId;
         public string app_id;
         public string itemId;
         public int serialNumber;
@@ -69,6 +71,8 @@ namespace Blsqui.SDK
             presence = gameObject.AddComponent<BlsquiWebRTCPresence>();
             presence.OnMessageReceived += OnPresenceMessage;
         }
+
+        public BlsquiWebRTCPresence Presence => presence;
 
         public void Configure(string cfgAppId, string cfgPubAddr, string cfgNetwork = "testnet")
         {
@@ -154,6 +158,15 @@ namespace Blsqui.SDK
         {
             if (rawText.Contains("\"PRESENCE_PING\""))
             {
+                // Adopt player address from dashboard ping if local address is empty
+                if (string.IsNullOrEmpty(userState.addr))
+                {
+                    string pingPlayer = ExtractStringValue(rawText, "player");
+                    if (!string.IsNullOrEmpty(pingPlayer))
+                    {
+                        userState.addr = pingPlayer;
+                    }
+                }
                 SendPresenceLiveSignal();
                 return;
             }
@@ -207,6 +220,26 @@ namespace Blsqui.SDK
                     reqFlixId = ExtractStringValue(rawText, "flix_id");
                 }
 
+                string reqPublisherAddr = ExtractStringValue(rawText, "publisherAddress");
+                if (string.IsNullOrEmpty(reqPublisherAddr))
+                {
+                    reqPublisherAddr = ExtractStringValue(rawText, "publisher_address");
+                }
+                if (string.IsNullOrEmpty(reqPublisherAddr))
+                {
+                    reqPublisherAddr = publisherAddress;
+                }
+
+                string reqAppId = ExtractStringValue(rawText, "appId");
+                if (string.IsNullOrEmpty(reqAppId))
+                {
+                    reqAppId = ExtractStringValue(rawText, "app_id");
+                }
+                if (string.IsNullOrEmpty(reqAppId))
+                {
+                    reqAppId = appId;
+                }
+
                 string reqItemId = ExtractStringValue(rawText, "itemId");
                 if (string.IsNullOrEmpty(reqItemId))
                 {
@@ -214,7 +247,6 @@ namespace Blsqui.SDK
                 }
 
                 string reqPlayer = ExtractStringValue(rawText, "player");
-                string reqAppId = ExtractStringValue(rawText, "app_id");
 
                 // Extract serialNumber dynamically (e.g., "serialNumber":2)
                 int serial = ExtractIntValue(rawText, "serialNumber");
@@ -227,13 +259,15 @@ namespace Blsqui.SDK
                 {
                     type = "ITEM_USE_REQUESTED",
                     flixId = reqFlixId,
+                    publisherAddress = reqPublisherAddr,
+                    appId = reqAppId,
+                    app_id = reqAppId,
                     itemId = reqItemId,
                     player = reqPlayer,
-                    app_id = reqAppId,
                     serialNumber = serial
                 };
 
-                Debug.Log($"[BlsquiSDK] Dispatching OnItemUseRequested -> Item: {payload.itemId}, Serial: {payload.serialNumber}, FLIX: {payload.flixId}");
+                Debug.Log($"[BlsquiSDK] Dispatching OnItemUseRequested -> Publisher: {payload.publisherAddress}, App: {payload.appId}, Item: {payload.itemId}, Serial: {payload.serialNumber}, FLIX: {payload.flixId}");
                 OnItemUseRequested?.Invoke(payload);
                 return;
             }

@@ -106,6 +106,9 @@ namespace Blsqui.SDK
             {
                 Debug.Log("✅ [Unity WebRTC DataChannel OPEN]");
                 UpdateState(s => s.connected = true);
+
+                // Immediately request state sync from dashboard on channel open
+                PingDashboard();
             };
 
             channel.OnClose = () =>
@@ -256,6 +259,40 @@ namespace Blsqui.SDK
             else
             {
                 Debug.LogWarning($"[WebRTC] Send dropped: DataChannel state is {(dc != null ? dc.ReadyState.ToString() : "null")}");
+            }
+        }
+
+        /// <summary>
+        /// Sends a PRESENCE_PING over the DataChannel to request state sync from dashboard.
+        /// </summary>
+        public void PingDashboard()
+        {
+            if (dc == null || dc.ReadyState != RTCDataChannelState.Open)
+            {
+                Debug.LogWarning("[Blsqui WebRTC] Cannot ping: DataChannel is not open.");
+                return;
+            }
+
+            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            string pingJson = $"{{\"type\":\"PRESENCE_PING\",\"role\":\"game\",\"player\":\"{activeAddress.ToLowerInvariant()}\",\"timestamp\":{nowMs}}}";
+            SendData(pingJson);
+        }
+
+        /// <summary>
+        /// Checks connection status and re-establishes if disconnected.
+        /// </summary>
+        public void VerifyOrReconnect(string playerAddress)
+        {
+            if (dc != null && dc.ReadyState == RTCDataChannelState.Open && _state.connected)
+            {
+                // Channel is alive: send ping immediately to force dashboard to push slots
+                PingDashboard();
+            }
+            else
+            {
+                // Connection dropped or never completed: re-initiate signaling
+                Debug.Log("[Blsqui WebRTC] Connection inactive on Hub open. Re-initializing...");
+                InitPresence(playerAddress, "game");
             }
         }
 
