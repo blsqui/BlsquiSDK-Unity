@@ -64,6 +64,7 @@ public class ActionButtonsController : MonoBehaviour
         if (BlsquiCurrentUser.Instance != null && isSubscribed)
         {
             BlsquiCurrentUser.Instance.OnSlotsUpdated -= UpdateEquipmentButtons;
+            BlsquiCurrentUser.Instance.OnItemUseRequested -= HandleItemUseRequested;
             isSubscribed = false;
         }
     }
@@ -151,6 +152,8 @@ public class ActionButtonsController : MonoBehaviour
         // Prepare transaction arguments matching FLIX template parameter requirements
         var txArgs = new Dictionary<string, string>
         {
+            { "publisherAddress", payload.publisherAddress },
+            { "appId", payload.appId },
             { "itemId", payload.itemId },
             { "serialNumber", payload.serialNumber.ToString() }
         };
